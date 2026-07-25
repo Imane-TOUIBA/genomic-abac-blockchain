@@ -500,3 +500,4 @@ La blockchain garantit l'immuabilité et la persistance des données tant que le
 Pour approfondir les concepts d'Hyperledger Fabric, des chaincodes et de l'architecture des canaux, consultez la documentation officielle :
 - [Documentation officielle Hyperledger Fabric](https://hyperledger-fabric.readthedocs.io/en/latest/)
 - [Guide du développeur de chaincodes (Go)](https://hyperledger-fabric.readthedocs.io/en/latest/chaincode4ade.html)
+
