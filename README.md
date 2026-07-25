@@ -373,9 +373,9 @@ curl "http://localhost:3000/api/consent?patientId=patient_test&orgId=CGNMSP&reso
 
 ## Étape 9 : Benchmark de performance (avec concurrence)
 
-Un benchmark séquentiel (une requête à la fois) ne mesure que la latence d'une requête isolée, pas la capacité réelle du système. Le script ci-dessous envoie les requêtes par lots concurrents, avec plusieurs connexions Fabric indépendantes, ce qui permet de mesurer un vrai débit sous charge et de repérer un point de saturation.
+Le script ci-dessous envoie les requêtes par lots concurrents, avec plusieurs connexions Fabric indépendantes, ce qui permet de mesurer un débit sous charge et de repérer un point de saturation.
 
-> ⚠️ **Limites à connaître avant d'interpréter les résultats** : le prototype comporte un seul peer par organisation et un seul orderer, sans redondance. Le script client tourne sur la même machine que les conteneurs Fabric (pas de latence réseau réelle, ressources CPU partagées). Les chiffres obtenus caractérisent donc la capacité de cette topologie minimale colocalisée, pas une capacité de production distribuée. Ces limites sont à mentionner explicitement dans un rapport.
+> ⚠️ **Limites à connaître avant d'interpréter les résultats** : le prototype comporte un seul peer par organisation et un seul orderer, sans redondance. Le script client tourne sur la même machine que les conteneurs Fabric (pas de latence réseau réelle, ressources CPU partagées). Les chiffres obtenus caractérisent donc la capacité de cette topologie minimale colocalisée, pas une capacité de production distribuée.
 
 ### 9.1. Enrichir les données de test
 Un test sur une seule combinaison n'aurait aucun intérêt statistique. Exécutez ce bloc pour créer un annuaire d'utilisateurs varié et ajouter des ressources/patients supplémentaires sur la blockchain :
