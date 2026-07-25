@@ -379,8 +379,6 @@ Le script ci-dessous envoie les requêtes par lots concurrents, avec plusieurs c
 
 ### 9.1. Enrichir les données de test
 
-### 9.1. Enrichir les données de test
-
 Exécutez ce bloc pour créer un annuaire d'utilisateurs varié et ajouter les ressources et patients supplémentaires sur la blockchain. 
 
 > ⚠️ **Note importante :** Ce script change automatiquement d'identité (IBMSP pour les ressources, CGNMSP pour les consentements) afin d'éviter les erreurs d'endorsement. Assurez-vous de l'exécuter depuis la racine du projet.
