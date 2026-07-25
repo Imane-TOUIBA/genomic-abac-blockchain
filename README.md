@@ -1,4 +1,4 @@
-# ABAC Genomic — Prototype de contrôle d'accès décentralisé (Hyperledger Fabric 2.5)
+# ABAC Genomic: Prototype de contrôle d'accès décentralisé (Hyperledger Fabric 2.5)
 
 Ce projet implémente un système de contrôle d'accès basé sur les attributs (ABAC) sur une infrastructure blockchain (Hyperledger Fabric) pour un consortium de recherche génomique multi-organisations. Il démontre qu'une décision d'accès n'est accordée que si trois politiques sont simultanément satisfaites :
 
