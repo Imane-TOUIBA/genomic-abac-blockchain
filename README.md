@@ -89,7 +89,7 @@ peer version
 ### 2.1. Cloner le dépôt
 ```bash
 cd ~
-git clone https://github.com/Imane-TOUIBA/LastVersion.git abac-genomic
+git clone https://github.com/Imane-TOUIBA/genomic-abac-blockchain.git abac-genomic
 cd abac-genomic
 ```
 
