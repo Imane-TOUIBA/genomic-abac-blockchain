@@ -26,3 +26,21 @@ node_modules/
 *.log
 benchmark_results/
 *.tar.gz
+
+# Artefacts de build
+*.tar.gz
+
+# Artefacts générés par Fabric
+organizations/
+channel-artifacts/
+system-genesis-block/
+
+# Dépendances Node.js
+node_modules/
+
+# Logs
+*.log
+
+# Fichiers temporaires
+.DS_Store
+Thumbs.db

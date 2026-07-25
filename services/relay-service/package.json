@@ -8,6 +8,6 @@
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.10.0",
-    "@hyperledger/fabric-gateway": "^1.11.0"
+    "@hyperledger/fabric-gateway": "^1.5.1"
   }
 }

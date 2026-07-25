@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "Portail web de gestion des consentements pour HU (proprietaire des donnees).",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
-    "express": "^4.19.2",
     "@grpc/grpc-js": "^1.10.0",
-    "@hyperledger/fabric-gateway": "^1.11.0"
+    "@hyperledger/fabric-gateway": "^1.5.1",
+    "express": "^4.19.2"
   }
 }
