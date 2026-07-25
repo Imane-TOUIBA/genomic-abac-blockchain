@@ -333,7 +333,7 @@ node submit_access_request.js DrUnauthorized o2b Executer Oncologie alpha
 
 ---
 
-## Étape 8 : Tester le cycle de vie complet d'un consentement (API REST)
+## Étape 8 : Tester le cycle de vie complet d'un consentement
 
 Ce test valide l'enregistrement, la vérification et la révocation dynamique des consentements via l'API.
 
@@ -345,7 +345,7 @@ node server.js &
 sleep 3
 ```
 
-### 8.2. Enchaîner les 4 appels
+### 8.2. Appels pour enregistrer, vérifier et révoquer un consentement
 ```bash
 # 1. Enregistrer un consentement
 curl -X POST http://localhost:3000/api/consent \
@@ -378,7 +378,12 @@ Le script ci-dessous envoie les requêtes par lots concurrents, avec plusieurs c
 > ⚠️ **Limites à connaître avant d'interpréter les résultats** : le prototype comporte un seul peer par organisation et un seul orderer, sans redondance. Le script client tourne sur la même machine que les conteneurs Fabric (pas de latence réseau réelle, ressources CPU partagées). Les chiffres obtenus caractérisent donc la capacité de cette topologie minimale colocalisée, pas une capacité de production distribuée.
 
 ### 9.1. Enrichir les données de test
-Un test sur une seule combinaison n'aurait aucun intérêt statistique. Exécutez ce bloc pour créer un annuaire d'utilisateurs varié et ajouter des ressources/patients supplémentaires sur la blockchain :
+
+### 9.1. Enrichir les données de test
+
+Exécutez ce bloc pour créer un annuaire d'utilisateurs varié et ajouter les ressources et patients supplémentaires sur la blockchain. 
+
+> ⚠️ **Note importante :** Ce script change automatiquement d'identité (IBMSP pour les ressources, CGNMSP pour les consentements) afin d'éviter les erreurs d'endorsement. Assurez-vous de l'exécuter depuis la racine du projet.
 
 ```bash
 cd ~/abac-genomic
@@ -397,7 +402,7 @@ cat << 'EOF' > services/pep-service/directory.json
 }
 EOF
 
-# 2. Définir les variables d'environnement
+# 2. Définir les variables d'environnement de base
 export PATH=$HOME/bin:$PATH
 export FABRIC_CFG_PATH=$PWD/config
 export CORE_PEER_TLS_ENABLED=true
@@ -410,7 +415,7 @@ TLS_IBM="$PWD/organizations/peerOrganizations/ib.example.com/peers/peer0.ib.exam
 PEER_HU="localhost:11051"
 TLS_HU="$PWD/organizations/peerOrganizations/hu.example.com/peers/peer0.hu.example.com/tls/ca.crt"
 
-# 3. Enregistrer les nouvelles ressources o3c, o4d (par IBMSP)
+# 3. Enregistrer les nouvelles ressources o3c, o4d (EN TANT QUE IBMSP - PROPRIÉTAIRE)
 export CORE_PEER_LOCALMSPID=IBMSP
 export CORE_PEER_ADDRESS=$PEER_IBM
 export CORE_PEER_TLS_ROOTCERT_FILE=$TLS_IBM
@@ -420,7 +425,7 @@ for res in "o3c" "o4d"; do
   peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile $ORDERER_CA -C global-channel -n gouvernancecc --peerAddresses $PEER_CGN --tlsRootCertFiles $TLS_CGN --peerAddresses $PEER_IBM --tlsRootCertFiles $TLS_IBM --peerAddresses $PEER_HU --tlsRootCertFiles $TLS_HU --waitForEvent -c "{\"function\":\"AttestationContract:RegisterResource\",\"Args\":[\"$res\", \"IBMSP\", \"true\", \"Oncologie\"]}"
 done
 
-# 4. Enregistrer les consentements pour de nouveaux patients (par CGNMSP)
+# 4. Enregistrer les consentements pour de nouveaux patients (EN TANT QUE CGNMSP)
 export CORE_PEER_LOCALMSPID=CGNMSP
 export CORE_PEER_ADDRESS=$PEER_CGN
 export CORE_PEER_TLS_ROOTCERT_FILE=$TLS_CGN
@@ -430,8 +435,7 @@ for patient in "beta" "gamma" "delta"; do
   peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile $ORDERER_CA -C global-channel -n consentcc --peerAddresses $PEER_CGN --tlsRootCertFiles $TLS_CGN --peerAddresses $PEER_IBM --tlsRootCertFiles $TLS_IBM --peerAddresses $PEER_HU --tlsRootCertFiles $TLS_HU --waitForEvent -c "{\"function\":\"RegisterConsent\",\"Args\":[\"$patient\",\"CGNMSP\",\"o2b\",\"Oncologie\",\"2030-12-31\"]}"
 done
 
-echo "Données enrichies avec succès."
-```
+echo "✅ Données enrichies avec succès."
 
 ### 9.2. Le script de benchmark concurrent
 
@@ -439,263 +443,6 @@ Créez le fichier `benchmark_concurrent.js` dans le service PEP.
 
 > ⚠️ **Point critique — nonce unique obligatoire.** Le chaincode `gouvernancecc` (`attestation_contract.go`) rejette toute transaction dont le champ `nonce` a déjà été vu (protection anti-rejeu). Sans ce champ, la première requête passe puis toutes les suivantes échouent avec `chaincode response 500, nonce déjà utilisé`. Le script génère un nonce unique à chaque requête — c'est indispensable pour obtenir 0 % d'erreurs.
 
-```bash
-cat << 'ENDOFSCRIPT' > ~/abac-genomic/services/pep-service/benchmark_concurrent.js
-'use strict';
-const fsSync = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const { connect, hash } = require('@hyperledger/fabric-gateway');
-const { newGrpcConnection, newIdentity, newSigner } = require('./connect');
-
-const CHANNEL = 'global-channel';
-const CHAINCODE = 'gouvernancecc';
-const CONTRACT = 'AttestationContract';
-const RESULTS_DIR = path.join(__dirname, '../../benchmark_results');
-const TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-');
-
-const USERS = ['DrEinstein', 'DrCurie', 'DrSmith', 'DrTuring', 'DrPasteur', 'DrInactive', 'DrUnauthorized'];
-const RESOURCES = ['o2b', 'o3c', 'o4d'];
-const PATIENTS = ['alpha', 'beta', 'gamma', 'delta'];
-const ACTIONS = ['Executer', 'Lire'];
-
-// ---------- Arguments CLI ----------
-// node benchmark_concurrent.js <totalRequests> <concurrency>
-const totalRequests = parseInt(process.argv[2]) || 200;
-const concurrency = parseInt(process.argv[3]) || 10;
-
-function loadDirectory() {
-    const data = fsSync.readFileSync(path.join(__dirname, 'directory.json'), 'utf-8');
-    return JSON.parse(data);
-}
-
-function evaluatePrequester(directory, userId, projectId) {
-    const user = directory[userId];
-    if (!user) return { ok: false, reason: 'Utilisateur inconnu', clearance: null };
-    if (!user.active) return { ok: false, reason: 'Compte inactif', clearance: null };
-    if (!user.projects.includes(projectId)) return { ok: false, reason: 'Non autorise sur le projet', clearance: null };
-    return { ok: true, reason: null, clearance: user.clearance };
-}
-
-async function newConnectedGateway() {
-    const client = await newGrpcConnection();
-    const gateway = connect({
-        client: client,
-        identity: await newIdentity(),
-        signer: await newSigner(),
-        hash: hash.sha256,
-        evaluateOptions: function() { return { deadline: Date.now() + 5000 }; },
-        endorseOptions: function() { return { deadline: Date.now() + 15000 }; },
-        submitOptions: function() { return { deadline: Date.now() + 5000 }; },
-        commitStatusOptions: function() { return { deadline: Date.now() + 60000 }; },
-    });
-    return { gateway, client };
-}
-
-async function submitAttestation(gateway, userId, resourceId, action, projectId, patientId, prequesterResult) {
-    const network = gateway.getNetwork(CHANNEL);
-    const contract = network.getContract(CHAINCODE, CONTRACT);
-
-    // NONCE UNIQUE OBLIGATOIRE (anti-rejeu côté chaincode)
-    const uniqueNonce = 'bench-' + Date.now() + '-' + crypto.randomBytes(6).toString('hex');
-    const attestationId = crypto.createHash('sha256').update(uniqueNonce).digest('hex');
-
-    const payload = {
-        attestation_id: attestationId,
-        requester_org: 'CGNMSP',
-        user_id: userId,
-        user_clearance: prequesterResult.clearance,
-        resource_id: resourceId,
-        owner_org: 'IBMSP',
-        action: action,
-        project_id: projectId,
-        patient_id: patientId,
-        prequester_ok: prequesterResult.ok,
-        nonce: uniqueNonce,
-        timestamp: new Date().toISOString()
-    };
-
-    const resultBytes = await contract.submitTransaction('SubmitAttestation', JSON.stringify(payload));
-    return JSON.parse(new TextDecoder().decode(resultBytes));
-}
-
-// Un "worker" possède sa propre connexion gRPC/gateway, pour que la
-// concurrence teste vraiment le réseau Fabric et non un seul canal partagé.
-async function runWorker(workerId, directory, requestIds, logFile, results) {
-    const { gateway, client } = await newConnectedGateway();
-
-    for (const id of requestIds) {
-        const userId = USERS[Math.floor(Math.random() * USERS.length)];
-        const resourceId = RESOURCES[Math.floor(Math.random() * RESOURCES.length)];
-        const patientId = PATIENTS[Math.floor(Math.random() * PATIENTS.length)];
-        const action = ACTIONS[Math.floor(Math.random() * ACTIONS.length)];
-
-        const reqStart = Date.now();
-        let status = 'ERROR';
-        let reason = '';
-
-        try {
-            const preq = evaluatePrequester(directory, userId, 'Oncologie');
-            if (!preq.ok) {
-                status = 'REJECTED_LOCAL';
-                reason = preq.reason;
-            } else {
-                const result = await submitAttestation(gateway, userId, resourceId, action, 'Oncologie', patientId, preq);
-                if (result.valid === true) {
-                    status = 'PERMIT';
-                    reason = '';
-                } else {
-                    status = 'DENY';
-                    reason = result.deny_reason || 'Non specifie';
-                }
-            }
-        } catch (error) {
-            status = 'ERROR';
-            reason = error.message;
-        }
-
-        const duration = Date.now() - reqStart;
-        const record = { id, worker: workerId, duration, status, userId, resourceId, patientId, reason, startedAt: reqStart };
-        results.push(record);
-        fsSync.appendFileSync(
-            logFile,
-            [id, workerId, duration, status, userId, resourceId, patientId, '"' + reason.replace(/"/g, "'") + '"'].join(',') + '\n'
-        );
-        process.stdout.write('.'); // progression compacte pour ne pas noyer la console
-    }
-
-    gateway.close();
-    client.close();
-}
-
-function percentile(sortedArr, p) {
-    if (sortedArr.length === 0) return 0;
-    const idx = Math.min(sortedArr.length - 1, Math.ceil((p / 100) * sortedArr.length) - 1);
-    return sortedArr[Math.max(0, idx)];
-}
-
-function stdDev(arr, mean) {
-    if (arr.length < 2) return 0;
-    const variance = arr.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / (arr.length - 1);
-    return Math.sqrt(variance);
-}
-
-async function runBenchmark() {
-    fsSync.mkdirSync(RESULTS_DIR, { recursive: true });
-    const logFile = path.join(RESULTS_DIR, 'benchmark_concurrent_' + TIMESTAMP + '.csv');
-    fsSync.writeFileSync(logFile, 'id,worker,duration_ms,status,user,resource,patient,reason\n');
-
-    console.log('==========================================');
-    console.log('Benchmark ABAC Genomic — mode concurrent');
-    console.log('Date: ' + new Date().toLocaleString());
-    console.log('Requetes totales: ' + totalRequests);
-    console.log('Concurrence: ' + concurrency + ' clients simultanes');
-    console.log('==========================================\n');
-
-    if (totalRequests < 100) {
-        console.log('⚠️  ATTENTION: avec moins de 100 requetes, les percentiles');
-        console.log('   (P95, P99) et l\'ecart-type ne sont pas statistiquement fiables.');
-        console.log('   Utilisez au moins --total 100, idealement 300-500.\n');
-    }
-
-    const directory = loadDirectory();
-
-    // Répartir les IDs de requêtes entre les workers (round-robin)
-    const workerBuckets = Array.from({ length: concurrency }, () => []);
-    for (let i = 1; i <= totalRequests; i++) {
-        workerBuckets[(i - 1) % concurrency].push(i);
-    }
-
-    const results = [];
-    const wallStart = Date.now();
-
-    console.log('Lancement de ' + concurrency + ' workers en parallele...\n');
-
-    await Promise.all(
-        workerBuckets.map((ids, workerId) => runWorker(workerId, directory, ids, logFile, results))
-    );
-
-    const wallTime = Date.now() - wallStart;
-
-    console.log('\n');
-
-    // ---------- Statistiques ----------
-    const stats = {
-        total: results.length,
-        permit: results.filter(r => r.status === 'PERMIT').length,
-        deny: results.filter(r => r.status === 'DENY').length,
-        rejected_local: results.filter(r => r.status === 'REJECTED_LOCAL').length,
-        error: results.filter(r => r.status === 'ERROR').length,
-    };
-
-    // Latence par type de requête : séparer le fail-fast local (quasi 0ms)
-    // des vraies requêtes blockchain, sinon la moyenne globale est trompeuse.
-    const chainDurations = results
-        .filter(r => r.status === 'PERMIT' || r.status === 'DENY')
-        .map(r => r.duration)
-        .sort((a, b) => a - b);
-
-    const allDurations = results.map(r => r.duration).sort((a, b) => a - b);
-
-    const avgChain = chainDurations.length
-        ? chainDurations.reduce((a, b) => a + b, 0) / chainDurations.length
-        : 0;
-    const sd = stdDev(chainDurations, avgChain);
-
-    // Débit réel sous charge concurrente : requêtes traitées / temps mur total
-    const throughput = stats.total / (wallTime / 1000);
-
-    // Débit "utile" : uniquement les requêtes ayant atteint la blockchain
-    const chainThroughput = chainDurations.length / (wallTime / 1000);
-
-    console.log('==========================================');
-    console.log('Resultats du Benchmark (mode concurrent)');
-    console.log('==========================================');
-    console.log('Temps mur total: ' + wallTime + 'ms (' + (wallTime / 1000).toFixed(2) + 's)');
-    console.log('Concurrence utilisee: ' + concurrency + ' clients');
-    console.log('Debit global: ' + throughput.toFixed(2) + ' requetes/seconde');
-    console.log('Debit blockchain (PERMIT+DENY uniquement): ' + chainThroughput.toFixed(2) + ' requetes/seconde');
-
-    console.log('\nDistribution des resultats:');
-    console.log('  PERMIT: ' + stats.permit + ' (' + (stats.permit * 100 / stats.total).toFixed(1) + '%)');
-    console.log('  DENY: ' + stats.deny + ' (' + (stats.deny * 100 / stats.total).toFixed(1) + '%)');
-    console.log('  REJET LOCAL: ' + stats.rejected_local + ' (' + (stats.rejected_local * 100 / stats.total).toFixed(1) + '%)');
-    console.log('  ERREURS: ' + stats.error + ' (' + (stats.error * 100 / stats.total).toFixed(1) + '%)');
-
-    if (chainDurations.length > 0) {
-        console.log('\nLatence des requetes blockchain (PERMIT+DENY), n=' + chainDurations.length + ':');
-        console.log('  Minimum: ' + chainDurations[0] + 'ms');
-        console.log('  Maximum: ' + chainDurations[chainDurations.length - 1] + 'ms');
-        console.log('  Moyenne: ' + avgChain.toFixed(2) + 'ms  (ecart-type: ' + sd.toFixed(2) + 'ms)');
-        console.log('  Median (P50): ' + percentile(chainDurations, 50) + 'ms');
-        console.log('  P90: ' + percentile(chainDurations, 90) + 'ms');
-        console.log('  P95: ' + percentile(chainDurations, 95) + 'ms');
-        console.log('  P99: ' + percentile(chainDurations, 99) + 'ms');
-    } else {
-        console.log('\nAucune requete n\'a atteint la blockchain (toutes REJECTED_LOCAL ou ERROR).');
-    }
-
-    console.log('\nFichier de resultats: ' + logFile);
-    console.log('==========================================');
-
-    if (stats.error > 0) {
-        console.log('\n⚠️  ' + stats.error + ' erreur(s) detectee(s). Raisons rencontrees :');
-        const errorReasons = {};
-        results.filter(r => r.status === 'ERROR').forEach(r => {
-            errorReasons[r.reason] = (errorReasons[r.reason] || 0) + 1;
-        });
-        Object.entries(errorReasons).forEach(([reason, count]) => {
-            console.log('  - (' + count + 'x) ' + reason);
-        });
-    }
-}
-
-runBenchmark().catch(function(err) {
-    console.error('Erreur fatale:', err);
-    process.exit(1);
-});
-ENDOFSCRIPT
-```
 
 ### 9.3. Exécuter le benchmark
 
@@ -704,7 +451,7 @@ Syntaxe : `node benchmark_concurrent.js <nombre_total_requetes> <concurrence>`
 ```bash
 cd ~/abac-genomic/services/pep-service
 
-# Test de fumée d'abord — vérifier que ça tourne sans erreur
+# Test vérifier que ça tourne sans erreur
 node benchmark_concurrent.js 20 3
 
 # Puis monter progressivement en charge pour chercher le point de saturation
@@ -712,35 +459,6 @@ node benchmark_concurrent.js 100 5
 node benchmark_concurrent.js 100 10
 node benchmark_concurrent.js 100 30
 node benchmark_concurrent.js 100 80
-```
-
-**Exemple de résultat réel obtenu (100 requêtes, 30 clients concurrents) :**
-```text
-==========================================
-Resultats du Benchmark (mode concurrent)
-==========================================
-Temps mur total: 5139ms (5.14s)
-Concurrence utilisee: 30 clients
-Debit global: 19.46 requetes/seconde
-Debit blockchain (PERMIT+DENY uniquement): 12.06 requetes/seconde
-
-Distribution des resultats:
-  PERMIT: 17 (17.0%)
-  DENY: 45 (45.0%)
-  REJET LOCAL: 38 (38.0%)
-  ERREURS: 0 (0.0%)
-
-Latence des requetes blockchain (PERMIT+DENY), n=62:
-  Minimum: 317ms
-  Maximum: 2278ms
-  Moyenne: 1124.87ms  (ecart-type: 462.36ms)
-  Median (P50): 1075ms
-  P90: 1799ms
-  P95: 1873ms
-  P99: 2278ms
-
-Fichier de resultats: /home/<user>/abac-genomic/benchmark_results/benchmark_concurrent_2026-07-25T12-04-11-694Z.csv
-==========================================
 ```
 
 Un fichier CSV détaillé est généré à chaque exécution dans
@@ -752,31 +470,6 @@ id,worker,duration_ms,status,user,resource,patient,reason
 2,1,0,REJECTED_LOCAL,DrInactive,o3c,beta,"Compte inactif"
 3,2,2234,DENY,DrSmith,o4d,gamma,"POWNER_FAIL : Habilitation insuffisante"
 ```
-
-### 9.4. Interpréter les résultats
-
-- **Débit blockchain** (PERMIT+DENY uniquement) est la métrique la plus honnête : elle exclut les rejets locaux (quasi instantanés, biaisent le débit global à la hausse) et reflète la capacité réelle du réseau Fabric.
-- **Repérer le plateau de saturation** : augmentez la concurrence par paliers (3 → 10 → 30 → 80...) jusqu'à observer que le débit blockchain cesse de croître, voire diminue, pendant que la latence moyenne et l'écart-type augmentent. C'est le signe d'une saturation de la capacité d'endossement/ordering avec cette topologie à un seul peer par organisation.
-- **Un seul run n'est pas suffisant** pour un chiffre défendable. Répétez chaque configuration plusieurs fois :
-```bash
-  for i in 1 2 3; do
-    echo "=== Run $i ==="
-    node benchmark_concurrent.js 100 10
-    sleep 10
-  done
-```
-  et comparez les débits/latences entre runs pour évaluer la stabilité des mesures.
-
-### 9.5. Limites à mentionner dans un rapport
-
-1. **Topologie minimale sans redondance** : un seul peer par organisation, un seul orderer. Le vrai goulot d'étranglement (endossement côté peer vs ordering séquentiel) n'est pas distingué par ce script.
-2. **Colocalisation** : le script client et les conteneurs Fabric tournent sur la même VM et se disputent le même CPU. Une dégradation à forte concurrence peut venir soit d'une saturation réelle de Fabric, soit du processus Node.js du benchmark lui-même — ce script ne permet pas de trancher entre les deux causes sans une mesure complémentaire (ex. `docker stats` en parallèle).
-3. **Concurrence approximative, pas garantie** : chaque worker traite ses requêtes séquentiellement en interne ; le nombre de requêtes réellement "en vol" simultanément fluctue autour du paramètre `concurrency`, il n'est pas verrouillé strictement à cette valeur à chaque instant.
-4. **Pas de latence réseau réelle** : toutes les requêtes partent de `localhost`, sans le délai qu'impliquerait une architecture multi-sites réelle (IB/CGN/HU sur des réseaux distincts).
-5. **Échantillon limité** : les percentiles (P95/P99) ne deviennent statistiquement significatifs qu'à partir d'environ 100 requêtes ; en dessous, le script en avertit automatiquement.
-
-Ces limites sont normales pour un prototype académique et peuvent être mentionnées dans une section "Travaux futurs" (ex. déploiement multi-VM avec peers redondants, génération de charge depuis des machines clientes distinctes).
-
 ---
 
 ## Dépannage (FAQ)
