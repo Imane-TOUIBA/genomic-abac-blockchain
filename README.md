@@ -80,7 +80,6 @@ go version
 node --version
 peer version
 ```
-*(Si `peer version` affiche un numéro de version, vous êtes prêt pour la suite).*
 
 ---
 
@@ -126,7 +125,7 @@ docker ps --filter "name=peer" --filter "name=orderer"
 Les chaincodes sont le code métier qui s'exécute sur la blockchain.
 
 ### 4.0. Définir les variables globales
-Copiez ce bloc une seule fois. Il définit les chemins vers les certificats et les adresses des nœuds.
+Ce bloc définit les chemins vers les certificats et les adresses des nœuds.
 ```bash
 cd ~/abac-genomic
 export PATH=$HOME/bin:$PATH
@@ -216,7 +215,7 @@ docker run --rm -d --name gouvernancecc_ccaas --network abac-genomic_test -e CHA
 ```
 
 ### 4.3. Déploiement de `policycc` (Canal project-channel)
-Gère les politiques d'accès fines. *Attention : HU n'est pas membre de ce canal.*
+Gère les politiques d'accès fines.
 
 ```bash
 # 1. Construction et packaging
@@ -230,7 +229,7 @@ cd ~/abac-genomic
 
 POLICY_PKG_ID=$(peer lifecycle chaincode calculatepackageid policycc_ccaas.tar.gz)
 
-# 2. Installation et 3. Approbation (Uniquement CGN et IBM)
+# 2. Installation et 3. Approbation
 for ORG in CGNMSP IBMSP; do
     export CORE_PEER_LOCALMSPID=$ORG
     if [ "$ORG" == "CGNMSP" ]; then export CORE_PEER_ADDRESS=$PEER_CGN; export CORE_PEER_TLS_ROOTCERT_FILE=$TLS_CGN; export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/cgn.example.com/users/Admin@cgn.example.com/msp; fi
@@ -239,7 +238,7 @@ for ORG in CGNMSP IBMSP; do
     peer lifecycle chaincode approveformyorg -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --channelID project-channel --name policycc --version 1.0 --package-id $POLICY_PKG_ID --sequence 1 --tls --cafile $ORDERER_CA --peerAddresses $CORE_PEER_ADDRESS --tlsRootCertFiles $CORE_PEER_TLS_ROOTCERT_FILE
 done
 
-# 4. Commit final (Uniquement CGN et IBM)
+# 4. Commit final
 export CORE_PEER_LOCALMSPID=CGNMSP; export CORE_PEER_ADDRESS=$PEER_CGN; export CORE_PEER_TLS_ROOTCERT_FILE=$TLS_CGN; export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/cgn.example.com/users/Admin@cgn.example.com/msp
 peer lifecycle chaincode commit -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --channelID project-channel --name policycc --version 1.0 --sequence 1 --tls --cafile $ORDERER_CA --peerAddresses $PEER_CGN --tlsRootCertFiles $TLS_CGN --peerAddresses $PEER_IBM --tlsRootCertFiles $TLS_IBM
 
@@ -262,14 +261,14 @@ Le ledger (registre de la blockchain) est vide à sa création. Nous allons y in
 ```bash
 cd ~/abac-genomic
 
-# 1. Enregistrer la ressource "o2b" (par IBMSP)
+# 1. Enregistrer la ressource "o2b" 
 export CORE_PEER_LOCALMSPID=IBMSP; export CORE_PEER_ADDRESS=$PEER_IBM; export CORE_PEER_TLS_ROOTCERT_FILE=$TLS_IBM; export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/ib.example.com/users/Admin@ib.example.com/msp
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile $ORDERER_CA -C global-channel -n gouvernancecc --peerAddresses $PEER_CGN --tlsRootCertFiles $TLS_CGN --peerAddresses $PEER_IBM --tlsRootCertFiles $TLS_IBM --peerAddresses $PEER_HU --tlsRootCertFiles $TLS_HU --waitForEvent -c '{"function":"AttestationContract:RegisterResource","Args":["o2b", "IBMSP", "true", "Oncologie"]}'
 
-# 2. Enregistrer la convention IBMSP -> CGNMSP (par IBMSP)
+# 2. Enregistrer la convention IBMSP -> CGNMSP 
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile $ORDERER_CA -C global-channel -n gouvernancecc --peerAddresses $PEER_CGN --tlsRootCertFiles $TLS_CGN --peerAddresses $PEER_IBM --tlsRootCertFiles $TLS_IBM --peerAddresses $PEER_HU --tlsRootCertFiles $TLS_HU --waitForEvent -c '{"function":"TrustContract:RegisterConvention","Args":["IBMSP", "CGNMSP", "Oncologie", "2030-12-31T23:59:59Z"]}'
 
-# 3. Enregistrer le consentement du patient alpha (par CGNMSP)
+# 3. Enregistrer le consentement du patient alpha
 export CORE_PEER_LOCALMSPID=CGNMSP; export CORE_PEER_ADDRESS=$PEER_CGN; export CORE_PEER_TLS_ROOTCERT_FILE=$TLS_CGN; export CORE_PEER_MSPCONFIGPATH=$PWD/organizations/peerOrganizations/cgn.example.com/users/Admin@cgn.example.com/msp
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile $ORDERER_CA -C global-channel -n consentcc --peerAddresses $PEER_CGN --tlsRootCertFiles $TLS_CGN --peerAddresses $PEER_IBM --tlsRootCertFiles $TLS_IBM --peerAddresses $PEER_HU --tlsRootCertFiles $TLS_HU --waitForEvent -c '{"function":"RegisterConsent","Args":["alpha", "CGNMSP", "o2b", "Oncologie", "2030-12-31"]}'
 
@@ -293,7 +292,7 @@ cd ~/abac-genomic/services/consent-portal && npm install
 
 ---
 
-## Étape 7 : Test de bout en bout (Scénario Flux 2)
+## Étape 7 : Test de bout en bout
 
 Pour tester le système, nous devons lancer le service "Relais" en arrière-plan, puis soumettre une demande via le service "PEP".
 
@@ -335,7 +334,7 @@ node submit_access_request.js DrUnauthorized o2b Executer Oncologie alpha
 
 ## Étape 8 : Tester le cycle de vie complet d'un consentement
 
-Ce test valide l'enregistrement, la vérification et la révocation dynamique des consentements via l'API.
+Ce test valide l'enregistrement, la vérification et la révocation dynamique des consentements.
 
 ### 8.1. Démarrer le portail de consentement
 ```bash
@@ -367,11 +366,9 @@ curl -X DELETE http://localhost:3000/api/consent \
 curl "http://localhost:3000/api/consent?patientId=patient_test&orgId=CGNMSP&resourceId=o2b&projectId=Oncologie"
 # Attendu : {"success":true,"data":{"isValid":false}}
 ```
-*Note : Le portail se connecte avec l'identité `CGNMSP`. Le chaincode refuse volontairement toute tentative d'une organisation d'enregistrer un consentement au nom d'une autre.*
-
 ---
 
-## Étape 9 : Benchmark de performance (avec concurrence)
+## Étape 9 : Benchmark de performance
 
 Le script ci-dessous envoie les requêtes par lots concurrents, avec plusieurs connexions Fabric indépendantes, ce qui permet de mesurer un débit sous charge et de repérer un point de saturation.
 
@@ -439,7 +436,7 @@ echo "✅ Données enrichies avec succès."
 
 Créez le fichier `benchmark_concurrent.js` dans le service PEP.
 
-> ⚠️ **Point critique — nonce unique obligatoire.** Le chaincode `gouvernancecc` (`attestation_contract.go`) rejette toute transaction dont le champ `nonce` a déjà été vu (protection anti-rejeu). Sans ce champ, la première requête passe puis toutes les suivantes échouent avec `chaincode response 500, nonce déjà utilisé`. Le script génère un nonce unique à chaque requête — c'est indispensable pour obtenir 0 % d'erreurs.
+> ⚠️ **Point critique: nonce unique obligatoire.** Le chaincode `gouvernancecc` (`attestation_contract.go`) rejette toute transaction dont le champ `nonce` a déjà été vu (protection anti-rejeu). Sans ce champ, la première requête passe puis toutes les suivantes échouent avec `chaincode response 500, nonce déjà utilisé`. Le script génère un nonce unique à chaque requête c'est indispensable pour obtenir 0 % d'erreurs.
 
 
 ### 9.3. Exécuter le benchmark
